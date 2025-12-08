@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Trip Receipt</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: Arial, sans-serif;
+            margin-top: 20px;
+        }
+        thead th {
+            background-color: #4CAF50;
+            color: white;
+            text-align: left;
+            padding: 12px;
+            font-size: 14px;
+        }
+        tbody td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            font-size: 13px;
+            color: #333;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        td:nth-child(8),
+        td:nth-child(9),
+        td:nth-child(10),
+        td:nth-child(11) {
+            text-align: right;
+        }
+
+        td:nth-child(12) {
+            max-width: 200px;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <h2>Trip Receipt</h2>
+    <table>
+    <thead>
+        <tr>
+            <th>Trip ID</th>
+            <th>Customer Name</th>
+            <th>Date</th>
+            <th>Driver</th>
+            <th>Vehicle</th>
+            <th>Pickup</th>
+            <th>Destination</th>
+            <th>Distance</th>
+            <th>Duration</th>
+            <th>Amount</th>
+            <th>Rating</th>
+            <th>Feedback</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>{{.Pdf.ID}}</td>
+            <td>{{.Pdf.CustomerName}}</td>
+            <td>{{.Pdf.BookingDate}}</td>
+            <td>{{.Pdf.DriverName}}</td>
+            <td>{{.Pdf.VehicleName}}</td>
+            <td>{{.Pdf.PickupLocation}}</td>
+            <td>{{.Pdf.Destination}}</td>
+            <td>{{.Pdf.DistanceKM}}</td>
+            <td>{{.Pdf.DurationMinutes}}</td>
+            <td>{{.AmountFormatted}}</td>
+            <td>{{.Pdf.Rating}}</td>
+            <td>{{.Pdf.Feedback}}</td>
+        </tr>
+    </tbody>
+</table>
+</body>
+</html>
