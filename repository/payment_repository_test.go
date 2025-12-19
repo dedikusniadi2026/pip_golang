@@ -5,7 +5,9 @@ import (
 	"auth-service/repository"
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -390,4 +392,198 @@ func TestPaymentRepository_Delete_Error(t *testing.T) {
 
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
+}
+
+func TestPaymentRepository_GetPaymentStats_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	mock.ExpectQuery(`SELECT\s+CAST\(COALESCE\(SUM\(amount\), 0\) AS BIGINT\)`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"sum"}).
+				AddRow("INVALID"), // ❌ harus int64
+		)
+
+	stats, err := repo.GetPaymentStats(context.Background())
+
+	assert.Error(t, err)
+	assert.Nil(t, stats)
+}
+
+func TestPaymentRepository_GetPayments_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"payment_id", "booking_id", "customer", "driver",
+		"amount", "method", "status", "payment_date",
+	}).AddRow(
+		1, 1, "Cust", "Driver",
+		"INVALID_AMOUNT", // ❌ string → number
+		"CASH", "paid", time.Now(),
+	)
+
+	mock.ExpectQuery(`FROM payment`).
+		WillReturnRows(rows)
+
+	result, err := repo.GetPayments(1, 10)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestPaymentRepository_GetAll_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"payment_id", "booking_id", "customer", "driver",
+		"amount", "method", "status", "payment_date",
+	}).AddRow(
+		1, 1, "Cust", "Driver",
+		"INVALID",
+		"CASH", "paid", time.Now(),
+	)
+
+	mock.ExpectQuery(`FROM payment`).
+		WillReturnRows(rows)
+
+	result, err := repo.GetAll(context.Background())
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestPaymentRepository_GetAll_RowsError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"payment_id", "booking_id", "customer", "driver",
+		"amount", "method", "status", "payment_date",
+	}).
+		AddRow(1, 1, "Cust", "Driver", 1000, "CASH", "paid", time.Now()).
+		RowError(0, errors.New("row error"))
+
+	mock.ExpectQuery(`FROM payment`).
+		WillReturnRows(rows)
+
+	result, err := repo.GetAll(context.Background())
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestPaymentRepository_GetByID_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	mock.ExpectQuery(`FROM payment WHERE payment_id=\$1`).
+		WithArgs(1).
+		WillReturnError(errors.New("db error"))
+
+	result, err := repo.GetByID(context.Background(), 1)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
+
+func TestPaymentRepository_Create_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	mock.ExpectQuery(`INSERT INTO payment`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"payment_id"}).
+				AddRow("INVALID"), // ❌ int expected
+		)
+
+	id, err := repo.Create(context.Background(), &model.Payment{})
+
+	assert.Error(t, err)
+	assert.Equal(t, 0, id)
+}
+
+func TestGetPaymentStats_TotalPaymentScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	mock.ExpectQuery(`SELECT\s+CAST\(COALESCE\(SUM\(amount\), 0\) AS BIGINT\)`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"sum"}).
+				AddRow("INVALID"),
+		)
+
+	stats, err := repo.GetPaymentStats(context.Background())
+
+	assert.Error(t, err)
+	assert.Nil(t, stats)
+}
+
+func TestGetPaymentStats_PendingPaymentScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	mock.ExpectQuery(`WHERE status = 'paid'`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"sum"}).
+				AddRow(int64(1000)),
+		)
+
+	mock.ExpectQuery(`WHERE status = 'pending'`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"sum"}).
+				AddRow("INVALID"),
+		)
+
+	stats, err := repo.GetPaymentStats(context.Background())
+
+	assert.Error(t, err)
+	assert.Nil(t, stats)
+}
+
+func TestGetPaymentStats_TotalTransactionsScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewPaymentRepository(db)
+
+	mock.ExpectQuery(`WHERE status = 'paid'`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"sum"}).
+				AddRow(int64(1000)),
+		)
+
+	mock.ExpectQuery(`WHERE status = 'pending'`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"sum"}).
+				AddRow(int64(500)),
+		)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\)`).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"count"}).
+				AddRow("INVALID"),
+		)
+
+	stats, err := repo.GetPaymentStats(context.Background())
+
+	assert.Error(t, err)
+	assert.Nil(t, stats)
 }

@@ -5,6 +5,7 @@ import (
 	"auth-service/repository"
 	"context"
 	"database/sql"
+	"errors"
 	"regexp"
 	"testing"
 	"time"
@@ -164,6 +165,143 @@ func TestTripsRepository_FindByID_NotFound(t *testing.T) {
 	result, err := repo.FindByID(id)
 	assert.NoError(t, err)
 	assert.Nil(t, result)
+}
+
+func TestFindByVehicle_QueryError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripRepo(db)
+
+	mock.ExpectQuery("FROM vehicle_trips").
+		WithArgs(uint(1)).
+		WillReturnError(errors.New("query failed"))
+
+	trips, err := repo.FindByVehicle(1)
+
+	assert.Nil(t, trips)
+	assert.Error(t, err)
+}
+
+func TestFindByVehicle_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripRepo(db)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "vehicle_id", "trip_date",
+	}).AddRow(1, 1, time.Now())
+
+	mock.ExpectQuery("FROM vehicle_trips").
+		WillReturnRows(rows)
+
+	trips, err := repo.FindByVehicle(1)
+
+	assert.Nil(t, trips)
+	assert.Error(t, err)
+}
+
+func TestGetTripTotal_CountError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripRepo(db)
+
+	mock.ExpectQuery("SELECT COUNT").
+		WillReturnError(errors.New("count error"))
+
+	stats, err := repo.GetTripTotal(context.Background())
+
+	assert.Nil(t, stats)
+	assert.Error(t, err)
+}
+
+func TestGetTripTotal_Success(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripRepo(db)
+
+	mock.ExpectQuery("SELECT COUNT").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
+	mock.ExpectQuery("SUM\\(distance_km\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(50))
+
+	mock.ExpectQuery("SUM\\(price\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(5000))
+
+	mock.ExpectQuery("AVG\\(rating\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"avg"}).AddRow(4.5))
+
+	stats, err := repo.GetTripTotal(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), stats.TotalTrips)
+}
+
+func TestGetTripTotal_AvgError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripRepo(db)
+
+	mock.ExpectQuery("SELECT COUNT").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+	mock.ExpectQuery("SUM\\(distance_km\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(10))
+
+	mock.ExpectQuery("SUM\\(price\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(1000))
+
+	mock.ExpectQuery("AVG\\(rating\\)").
+		WillReturnError(errors.New("avg error"))
+
+	stats, err := repo.GetTripTotal(context.Background())
+
+	assert.Nil(t, stats)
+	assert.Error(t, err)
+}
+
+func TestGetTripTotal_RevenueError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripRepo(db)
+
+	mock.ExpectQuery("SELECT COUNT").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+	mock.ExpectQuery("SUM\\(distance_km\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"sum"}).AddRow(10))
+
+	mock.ExpectQuery("SUM\\(price\\)").
+		WillReturnError(errors.New("price error"))
+
+	stats, err := repo.GetTripTotal(context.Background())
+
+	assert.Nil(t, stats)
+	assert.Error(t, err)
+}
+
+func TestGetTripTotal_DistanceError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripRepo(db)
+
+	mock.ExpectQuery("SELECT COUNT").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+	mock.ExpectQuery("SUM\\(distance_km\\)").
+		WillReturnError(errors.New("distance error"))
+
+	stats, err := repo.GetTripTotal(context.Background())
+
+	assert.Nil(t, stats)
+	assert.Error(t, err)
 }
 
 func TestTripsRepository_FindByID_Error(t *testing.T) {

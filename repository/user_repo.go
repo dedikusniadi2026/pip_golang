@@ -5,35 +5,41 @@ import (
 	"database/sql"
 )
 
-type UserRepositoryInterface interface {
-	GetUserWithRole(username string) (*model.User, error)
-}
-
-type UserRepository struct {
+type UserRepositoryImpl struct {
 	DB *sql.DB
 }
 
-func (r *UserRepository) GetUserWithRole(username string) (*model.User, error) {
-	var user model.User
+func (r *UserRepositoryImpl) Save(user *model.User) error {
+	_, err := r.DB.Exec(`
+		INSERT INTO users (username, password, role)
+		VALUES ($1, $2, $3)
+	`, user.Username, user.Password, user.Role)
+	return err
+}
 
-	query := `
-		SELECT u.id, u.username, u.password, r.role_name
-		FROM users u
-		JOIN user_roles ur ON ur.user_id = u.id
-		JOIN roles r ON r.id = ur.role_id
-		WHERE u.username = $1
-	`
+func (r *UserRepositoryImpl) FindByUsername(username string) (*model.User, error) {
+	row := r.DB.QueryRow(`
+		SELECT id, username, password, role
+		FROM users
+		WHERE username = $1
+	`, username)
 
-	err := r.DB.QueryRow(query, username).Scan(
-		&user.ID,
-		&user.Username,
-		&user.Password,
-		&user.Role,
-	)
-
+	user := model.User{}
+	err := row.Scan(&user.ID, &user.Username, &user.Password, &user.Role)
 	if err != nil {
 		return nil, err
 	}
-
 	return &user, nil
+}
+
+type tokenRepository struct {
+	DB *sql.DB
+}
+
+func (r *tokenRepository) Save(token *model.RefreshToken) error {
+	_, err := r.DB.Exec(`
+		INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3)
+	`, token.UserID, token.TokenHash, token.ExpiresAt)
+	return err
 }

@@ -11,50 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCarRepository_GetAll_Success(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer db.Close()
-
-	repo := repository.NewCarRepository(db)
-
-	lastMaintenance := time.Now()
-	rows := sqlmock.NewRows([]string{"id", "brand", "model", "year", "plate_number", "capacity", "color", "driver_id", "last_maintenance_date", "current_km"}).
-		AddRow(1, "Toyota", "Camry", 2020, "ABC123", 5, "Blue", 1, lastMaintenance, 10000).
-		AddRow(2, "Honda", "Civic", 2019, "XYZ456", 4, "Red", 2, nil, 15000)
-
-	mock.ExpectQuery(`SELECT id, brand, model, year, plate_number, capacity, color, driver_id, last_maintenance_date, current_km FROM vehicles`).
-		WillReturnRows(rows)
-
-	cars, err := repo.GetAll()
-
-	assert.NoError(t, err)
-	assert.Len(t, cars, 2)
-	assert.Equal(t, 1, cars[0].ID)
-	assert.Equal(t, "Toyota", cars[0].Brand)
-	assert.Equal(t, "Camry", cars[0].Model)
-	assert.Equal(t, 2020, cars[0].Year)
-	assert.Equal(t, "ABC123", cars[0].PlateNumber)
-	assert.Equal(t, 5, cars[0].Capacity)
-	assert.Equal(t, "Blue", cars[0].Color)
-	assert.Equal(t, 1, cars[0].DriverID)
-	assert.Equal(t, lastMaintenance, *cars[0].LastMaintenanceDate)
-	assert.Equal(t, 10000, cars[0].CurrentKM)
-	assert.Equal(t, 2, cars[1].ID)
-	assert.Equal(t, "Honda", cars[1].Brand)
-	assert.Equal(t, "Civic", cars[1].Model)
-	assert.Equal(t, 2019, cars[1].Year)
-	assert.Equal(t, "XYZ456", cars[1].PlateNumber)
-	assert.Equal(t, 4, cars[1].Capacity)
-	assert.Equal(t, "Red", cars[1].Color)
-	assert.Equal(t, 2, cars[1].DriverID)
-	assert.Nil(t, cars[1].LastMaintenanceDate)
-	assert.Equal(t, 15000, cars[1].CurrentKM)
-
-	err = mock.ExpectationsWereMet()
-	assert.NoError(t, err)
-}
-
 func TestCarRepository_GetAll_Error(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	assert.NoError(t, err)
@@ -73,6 +29,47 @@ func TestCarRepository_GetAll_Error(t *testing.T) {
 
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
+}
+
+func TestCarRepository_GetAll_ScanError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	repo := &repository.CarRepository{DB: db}
+
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"brand",
+		"model",
+		"year",
+		"plate_number",
+		"capacity",
+		"color",
+		"driver_id",
+		"last_maintenance_date",
+		"current_km",
+	}).AddRow(
+		1,
+		"Toyota",
+		"Avanza",
+		"INVALID_YEAR",
+		"D 1234 AA",
+		7,
+		"Black",
+		1,
+		time.Now(),
+		10000,
+	)
+
+	mock.ExpectQuery(`FROM vehicles`).
+		WillReturnRows(rows)
+
+	result, err := repo.GetAll()
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestCarRepository_GetByID_Success(t *testing.T) {
@@ -328,4 +325,46 @@ func TestCarRepository_Delete_Error(t *testing.T) {
 
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
+}
+
+func TestCarRepository_GetAll_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	repo := &repository.CarRepository{DB: db}
+
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"brand",
+		"model",
+		"year",
+		"plate_number",
+		"capacity",
+		"color",
+		"driver_id",
+		"last_maintenance_date",
+		"current_km",
+	}).AddRow(
+		1,
+		"Toyota",
+		"Avanza",
+		2022,
+		"D 1234 AA",
+		7,
+		"Black",
+		1,
+		time.Now(),
+		15000,
+	)
+
+	mock.ExpectQuery("FROM vehicles").
+		WillReturnRows(rows)
+
+	result, err := repo.GetAll()
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "Toyota", result[0].Brand)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -287,4 +288,25 @@ func TestGetTripTotal_Error(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestTripHandler_Create_InvalidJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockSvc := &MockTripService{}
+	h := handler.NewTripHandler(mockSvc)
+
+	r := gin.New()
+	r.POST("/trips", h.Create)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/trips",
+		strings.NewReader("{invalid json"),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

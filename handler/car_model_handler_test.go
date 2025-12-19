@@ -17,6 +17,12 @@ type MockCarModelService struct {
 	ReturnError bool
 }
 
+func TestNewCarModelRepositoryHandler(t *testing.T) {
+	mockSvc := &MockCarModelService{}
+	h := handler.NewCarModelRepositoryHandler(mockSvc)
+	assert.NotNil(t, h)
+}
+
 func (m *MockCarModelService) GetAll() ([]model.CarModel, error) {
 	if m.ReturnError {
 		return nil, errors.New("failed to fetch car models")
@@ -182,10 +188,45 @@ func TestCarModelHandler_Create_InvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestNewCarModelRepositoryHandler(t *testing.T) {
-	mockSvc := &MockCarModelService{}
-	h := handler.NewCarModelRepositoryHandler(mockSvc)
+func TestCarModelHandler_GetAll_InternalError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
-	assert.NotNil(t, h)
-	assert.Equal(t, mockSvc, h.Service)
+	mockSvc := &MockCarModelService{
+		ReturnError: true,
+	}
+
+	h := &handler.CarModelHandler{Service: mockSvc}
+
+	r := gin.New()
+	r.GET("/car-models", h.GetAll)
+
+	req := httptest.NewRequest(http.MethodGet, "/car-models", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to fetch car models")
+}
+
+func TestCarModelHandler_GetAll_OK(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := &MockCarModelService{
+		ReturnError: false,
+	}
+
+	h := &handler.CarModelHandler{
+		Service: mockSvc,
+	}
+
+	r := gin.New()
+	r.GET("/car-models", h.GetAll)
+
+	req := httptest.NewRequest(http.MethodGet, "/car-models", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
 }

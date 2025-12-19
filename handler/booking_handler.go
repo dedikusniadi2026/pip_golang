@@ -44,6 +44,7 @@ func (h *BookingHandler) GetAll(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, bookings)
 }
+
 func (h *BookingHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 

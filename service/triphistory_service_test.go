@@ -24,22 +24,26 @@ func (m *MockTripHistoryRepository) GetBookingByCode() (*model.TripHistory, erro
 	return args.Get(0).(*model.TripHistory), args.Error(1)
 }
 
-func TestTripHistoryService_GetTripHistory(t *testing.T) {
-	mockRepo := new(MockTripHistoryRepository)
-	service := service.TripHistoryService{
-		Repo: mockRepo,
-	}
+func TestMockTripHistoryService_GetTripHistory(t *testing.T) {
+	mockService := &service.MockTripHistoryService{}
 
-	expectedData := []model.TripHistory{
-		{ID: 1, CustomerName: "Trip A"},
-	}
-
-	mockRepo.On("GetTripHistory").Return(expectedData, nil)
-
-	result, err := service.GetTripHistory()
+	result, err := mockService.GetTripHistory()
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedData, result)
+	assert.Empty(t, result)
+}
+
+func TestTripHistoryService_GetTripHistory(t *testing.T) {
+	mockRepo := new(MockTripHistoryRepository)
+	svc := service.NewTripHistoryService(mockRepo)
+
+	expected := []model.TripHistory{{ID: 1, CustomerName: "Trip A"}}
+	mockRepo.On("GetTripHistory").Return(expected, nil)
+
+	result, err := svc.GetTripHistory()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+
 	mockRepo.AssertExpectations(t)
 }
 
@@ -47,18 +51,26 @@ func TestTripHistoryService_GetTripHistory_Error(t *testing.T) {
 	mockRepo := new(MockTripHistoryRepository)
 	svc := service.NewTripHistoryService(mockRepo)
 
-	expectedError := errors.New("database error")
-	mockRepo.On("GetTripHistory").Return(([]model.TripHistory)(nil), expectedError)
+	expectedErr := errors.New("db error")
+	mockRepo.On("GetTripHistory").Return([]model.TripHistory(nil), expectedErr)
 
 	result, err := svc.GetTripHistory()
 	assert.Error(t, err)
-	assert.Equal(t, expectedError, err)
 	assert.Nil(t, result)
+	assert.Equal(t, expectedErr, err)
+
 	mockRepo.AssertExpectations(t)
 }
 
-func TestMockTripHistoryRepository(t *testing.T) {
-	mockRepo := &MockTripHistoryRepository{}
-	mockRepo.On("GetTripHistory").Return([]model.TripHistory{}, nil)
-	mockRepo.GetTripHistory()
+func TestTripHistoryService_GetTripHistory_Empty(t *testing.T) {
+	mockRepo := new(MockTripHistoryRepository)
+	svc := service.NewTripHistoryService(mockRepo)
+
+	mockRepo.On("GetTripHistory").Return(([]model.TripHistory)(nil), nil)
+
+	result, err := svc.GetTripHistory()
+	assert.NoError(t, err)
+	assert.Empty(t, result)
+	mockRepo.AssertExpectations(t)
+
 }

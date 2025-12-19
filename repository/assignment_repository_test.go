@@ -3,6 +3,7 @@ package repository_test
 import (
 	"auth-service/model"
 	"auth-service/repository"
+	"errors"
 	"regexp"
 	"testing"
 	"time"
@@ -104,6 +105,70 @@ func TestAssignmentRepository_Update(t *testing.T) {
 
 	err = repo.Update(assignment)
 	assert.NoError(t, err)
+}
+
+func TestFindByVehicle_QueryError1(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewAssignmentsRepository(db)
+
+	mock.ExpectQuery("FROM driver_assignments").
+		WithArgs(uint(1)).
+		WillReturnError(errors.New("query error"))
+
+	result, err := repo.FindByVehicle(1)
+
+	assert.Nil(t, result)
+	assert.Error(t, err)
+}
+
+func TestFindByVehicle_ScanError2(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewAssignmentsRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "vehicle_id", "start_date",
+	}).AddRow(1, 1, time.Now())
+
+	mock.ExpectQuery("FROM driver_assignments").
+		WillReturnRows(rows)
+
+	result, err := repo.FindByVehicle(1)
+
+	assert.Nil(t, result)
+	assert.Error(t, err)
+}
+
+func TestFindByVehicle_Success(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewAssignmentsRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "vehicle_id", "start_date", "end_date",
+		"total_trips", "driver_name", "status",
+	}).AddRow(
+		1,
+		1,
+		time.Now(),
+		time.Now(),
+		10,
+		"Driver A",
+		"active",
+	)
+
+	mock.ExpectQuery("FROM driver_assignments").
+		WithArgs(uint(1)).
+		WillReturnRows(rows)
+
+	result, err := repo.FindByVehicle(1)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
 }
 
 func TestAssignmentRepository_Delete(t *testing.T) {

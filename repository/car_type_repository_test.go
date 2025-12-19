@@ -4,6 +4,7 @@ import (
 	"auth-service/model"
 	"auth-service/repository"
 	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -173,4 +174,42 @@ func TestCarTypeRepository_Create_Error(t *testing.T) {
 
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
+}
+
+func TestCarTypeRepository_FindAll_QueryError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	repo := repository.NewCarTypeRepository(db)
+
+	mock.ExpectQuery("SELECT id, type_name FROM car_type").
+		WillReturnError(errors.New("db error"))
+
+	result, err := repo.FindAll()
+
+	assert.Nil(t, result)
+	assert.Error(t, err)
+	assert.Equal(t, "db error", err.Error())
+}
+
+func TestCarTypeRepository_FindAll_ScanError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	repo := repository.NewCarTypeRepository(db)
+
+	rows := sqlmock.NewRows([]string{"id"}).
+		AddRow("abc")
+
+	mock.ExpectQuery(`SELECT id, type_name FROM car_type`).
+		WillReturnRows(rows)
+
+	result, err := repo.FindAll()
+
+	assert.Nil(t, result)
+	assert.Error(t, err)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

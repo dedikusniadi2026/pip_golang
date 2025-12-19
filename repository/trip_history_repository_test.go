@@ -4,7 +4,9 @@ import (
 	"auth-service/model"
 	"auth-service/repository"
 	"database/sql"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -126,4 +128,95 @@ func TestTripHistoryRepository_GetTripHistory_Error(t *testing.T) {
 
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
+}
+
+func TestGetTripHistory_QueryError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripHistoryRepository(db)
+
+	mock.ExpectQuery("FROM trips").
+		WillReturnError(errors.New("query error"))
+
+	trips, err := repo.GetTripHistory()
+
+	assert.Nil(t, trips)
+	assert.Error(t, err)
+}
+
+func TestGetTripHistory_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripHistoryRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "booking_code", "customer_name",
+	}).AddRow(1, "BC001", "John")
+
+	mock.ExpectQuery("FROM trips").
+		WillReturnRows(rows)
+
+	trips, err := repo.GetTripHistory()
+
+	assert.Nil(t, trips)
+	assert.Error(t, err)
+}
+
+func TestGetTripHistory_RowsErr(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripHistoryRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "booking_code", "customer_name", "booking_date",
+		"duration_minutes", "distance_km", "pickup_location",
+		"destination", "driver_name", "vehicle_name",
+		"amount", "rating", "feedback",
+	}).
+		AddRow(
+			1, "BC001", "John", time.Now(),
+			30, 10.5, "A", "B",
+			"Driver A", "Car A",
+			50000, 4.5, "OK",
+		).
+		RowError(0, errors.New("row error"))
+
+	mock.ExpectQuery("FROM trips").
+		WillReturnRows(rows)
+
+	trips, err := repo.GetTripHistory()
+
+	assert.Nil(t, trips)
+	assert.Error(t, err)
+}
+
+func TestGetTripHistory_Success(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewTripHistoryRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "booking_code", "customer_name", "booking_date",
+		"duration_minutes", "distance_km", "pickup_location",
+		"destination", "driver_name", "vehicle_name",
+		"amount", "rating", "feedback",
+	}).
+		AddRow(
+			1, "BC001", "John", time.Now(),
+			30, 10, "A", "B",
+			"Driver A", "Car A",
+			50000, 4.5, "OK",
+		)
+
+	mock.ExpectQuery("FROM trips").
+		WillReturnRows(rows)
+
+	trips, err := repo.GetTripHistory()
+
+	assert.NoError(t, err)
+	assert.Len(t, trips, 1)
 }

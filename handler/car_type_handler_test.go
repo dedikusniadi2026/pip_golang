@@ -11,121 +11,229 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 type MockCarTypeService struct {
-	ReturnError bool
-}
-
-func (m *MockCarTypeService) Create(ct model.CarType) error {
-	if m.ReturnError {
-		return errors.New("failed to create car type")
-	}
-	return nil
+	mock.Mock
 }
 
 func (m *MockCarTypeService) GetAll() ([]model.CarType, error) {
-	if m.ReturnError {
-		return nil, errors.New("failed to fetch car types")
-	}
-	return []model.CarType{
-		{ID: "1", TypeName: "Type A"},
-		{ID: "2", TypeName: "Type B"},
-	}, nil
+	args := m.Called()
+	return args.Get(0).([]model.CarType), args.Error(1)
 }
 
 func (m *MockCarTypeService) GetByID(id int) (*model.CarType, error) {
-	if m.ReturnError {
-		return nil, errors.New("service error")
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
 	}
-	if id != 1 {
-		return nil, nil
-	}
-	return &model.CarType{ID: "1", TypeName: "Type A"}, nil
+	return args.Get(0).(*model.CarType), args.Error(1)
 }
 
-func TestCarTypeHandler_GetAll(t *testing.T) {
+func (m *MockCarTypeService) Create(ct model.CarType) error {
+	args := m.Called(ct)
+	return args.Error(0)
+}
+
+func TestNewCarTypeHandler(t *testing.T) {
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
+	assert.NotNil(t, h)
+}
+
+func TestCarTypeHandler_GetAll_OK(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	mockSvc := &MockCarTypeService{}
-	h := &handler.CarTypeHandler{Service: mockSvc}
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
 
-	router := gin.Default()
-	router.GET("/car-types", h.GetAll)
+	mockSvc.On("GetAll").Return([]model.CarType{
+		{ID: "1", TypeName: "SUV"},
+	}, nil)
 
-	req, _ := http.NewRequest("GET", "/car-types", nil)
+	r := gin.New()
+	r.GET("/car-types", h.GetAll)
+
+	req := httptest.NewRequest(http.MethodGet, "/car-types", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-
+	mockSvc.AssertExpectations(t)
 }
 
 func TestCarTypeHandler_GetAll_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	mockSvc := &MockCarTypeService{ReturnError: true}
-	h := &handler.CarTypeHandler{Service: mockSvc}
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
 
-	router := gin.Default()
-	router.GET("/car-types", h.GetAll)
+	mockSvc.On("GetAll").Return([]model.CarType(nil), errors.New("db error"))
 
-	req, _ := http.NewRequest("GET", "/car-types", nil)
+	r := gin.New()
+	r.GET("/car-types", h.GetAll)
+
+	req := httptest.NewRequest(http.MethodGet, "/car-types", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
+	mockSvc.AssertExpectations(t)
 }
 
-func TestCarTypeHandler_GetByID(t *testing.T) {
+func TestCarTypeHandler_GetByID_OK(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	mockSvc := &MockCarTypeService{}
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
 
-	h := &handler.CarTypeHandler{Service: mockSvc}
+	mockSvc.On("GetByID", 1).
+		Return(&model.CarType{ID: "1", TypeName: "SUV"}, nil)
 
-	router := gin.Default()
-	router.GET("/car-types/:id", h.GetByID)
+	r := gin.New()
+	r.GET("/car-types/:id", h.GetByID)
 
-	req, _ := http.NewRequest("GET", "/car-types/1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/car-types/1", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+	mockSvc.AssertExpectations(t)
+}
 
-	req, _ = http.NewRequest("GET", "/car-types/2", nil)
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+func TestCarTypeHandler_GetByID_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
+
+	mockSvc.On("GetByID", 2).Return(nil, nil)
+
+	r := gin.New()
+	r.GET("/car-types/:id", h.GetByID)
+
+	req := httptest.NewRequest(http.MethodGet, "/car-types/2", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	mockSvc.AssertExpectations(t)
+}
 
-	req, _ = http.NewRequest("GET", "/car-types/abc", nil)
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+func TestCarTypeHandler_GetByID_BadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
+
+	r := gin.New()
+	r.GET("/car-types/:id", h.GetByID)
+
+	req := httptest.NewRequest(http.MethodGet, "/car-types/abc", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestCarTypeHandler_Create(t *testing.T) {
+func TestCarTypeHandler_GetByID_InternalError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	mockSvc := &MockCarTypeService{}
-	h := &handler.CarTypeHandler{Service: mockSvc}
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
 
-	router := gin.Default()
-	router.POST("/car-types", h.Create)
+	mockSvc.
+		On("GetByID", 1).
+		Return(nil, errors.New("db error"))
 
-	payload := `{"name":"New Type"}`
-	req, _ := http.NewRequest("POST", "/car-types", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
+	r := gin.New()
+	r.GET("/car-types/:id", h.GetByID)
+
+	req := httptest.NewRequest(http.MethodGet, "/car-types/1", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestCarTypeHandler_Create_OK(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
+
+	mockSvc.On("Create", mock.Anything).Return(nil)
+
+	r := gin.New()
+	r.POST("/car-types", h.Create)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/car-types",
+		strings.NewReader(`{"typeName":"SUV"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusCreated, w.Code)
+	mockSvc.AssertExpectations(t)
+}
 
-	payload = `invalid`
-	req, _ = http.NewRequest("POST", "/car-types", strings.NewReader(payload))
+func TestCarTypeHandler_Create_BadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
+
+	r := gin.New()
+	r.POST("/car-types", h.Create)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/car-types",
+		strings.NewReader(`invalid json`),
+	)
 	req.Header.Set("Content-Type", "application/json")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCarTypeHandler_Create_InternalError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := new(MockCarTypeService)
+	h := handler.NewCarTypeHandler(mockSvc)
+
+	mockSvc.
+		On("Create", mock.Anything).
+		Return(errors.New("insert failed"))
+
+	r := gin.New()
+	r.POST("/car-types", h.Create)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/car-types",
+		strings.NewReader(`{"typeName":"SUV"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	mockSvc.AssertExpectations(t)
 }

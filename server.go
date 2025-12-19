@@ -13,14 +13,15 @@ import (
 
 func SetupRouter(db *sql.DB) *gin.Engine {
 
-	userRepo := &repository.UserRepository{DB: db}
+	userRepo := &repository.UserRepositoryImpl{DB: db}
+	tokenRepo := &repository.TokenRepositoryImpl{DB: db}
 	driverRepo := &repository.DriverRepository{DB: db}
 	bookingRepo := &repository.BookingRepository{DB: db}
 	popularRepo := &repository.PopularDestinationRepository{DB: db}
 	carRepo := repository.NewCarRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
 
-	authService := &service.AuthService{Repo: userRepo}
+	authService := service.NewAuthService(userRepo, tokenRepo)
 	driverService := &service.DriverService{Repo: driverRepo}
 	bookingService := &service.BookingService{Repo: bookingRepo}
 	popularService := &service.PopularDestinationService{Repo: popularRepo}
@@ -89,7 +90,6 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// REGISTER ROUTES
 	r.POST("/login", authHandler.Login)
 	r.POST("/refresh", authHandler.Refresh)
 

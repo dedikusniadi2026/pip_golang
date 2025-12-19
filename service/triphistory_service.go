@@ -6,10 +6,7 @@ import (
 )
 
 type TripHistoryServiceInterface interface {
-	Create(*model.DriverAssignment) error
-	Update(*model.DriverAssignment) error
-	Delete(uint) error
-	FindByVehicle(uint) ([]model.DriverAssignment, error)
+	GetTripHistory() ([]model.TripHistory, error)
 }
 
 type TripHistoryMockService interface {

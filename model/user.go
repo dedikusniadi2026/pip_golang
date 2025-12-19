@@ -1,12 +1,8 @@
 package model
 
 type User struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
-}
-
-func (u *User) IsAdmin() bool {
-	return u.Role == "admin"
+	ID       int64
+	Username string
+	Password string
+	Role     string
 }

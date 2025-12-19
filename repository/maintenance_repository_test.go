@@ -4,6 +4,7 @@ import (
 	"auth-service/model"
 	"auth-service/repository"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -217,4 +218,59 @@ func TestMaintenanceRepository_Delete_Error(t *testing.T) {
 
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
+}
+
+func TestMaintenanceRepository_FindByVehicle_QueryError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.MaintenanceRepository{DB: db}
+
+	mock.ExpectQuery("SELECT .* FROM vehicle_maintenance WHERE vehicle_id = .* ORDER BY service_date DESC").
+		WithArgs(1).
+		WillReturnError(fmt.Errorf("query failed"))
+
+	list, err := repo.FindByVehicle(1)
+
+	assert.Error(t, err)
+	assert.Nil(t, list)
+	assert.Contains(t, err.Error(), "query failed")
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMaintenanceRepository_FindByVehicle_ScanError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	repo := &repository.MaintenanceRepository{DB: db}
+
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"vehicle_id",
+		"service_date",
+		"description",
+		"cost",
+		"mileage",
+		"service_type",
+	}).AddRow(
+		1,
+		1,
+		time.Now(),
+		"Routine service",
+		"INVALID_COST",
+		12000,
+		"OIL_CHANGE",
+	)
+
+	mock.ExpectQuery(`FROM vehicle_maintenance`).
+		WithArgs(1).
+		WillReturnRows(rows)
+
+	result, err := repo.FindByVehicle(1)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

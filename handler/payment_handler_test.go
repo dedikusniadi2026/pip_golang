@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"auth-service/handler"
@@ -17,7 +18,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockPaymentService is a mock implementation of PaymentServiceInterface
 type MockPaymentService struct {
 	mock.Mock
 }
@@ -73,6 +73,60 @@ func setupPaymentRouter(h *handler.PaymentHandler) *gin.Engine {
 	r.GET("/payments/stats", h.GetPaymentStats)
 
 	return r
+}
+
+func TestGetPaymentByID_InternalError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := new(MockPaymentService)
+	h := &handler.PaymentHandler{Service: mockSvc}
+
+	mockSvc.
+		On("GetPaymentByID", mock.Anything, 1).
+		Return(nil, errors.New("db error"))
+
+	r := gin.New()
+	r.GET("/payments/:id", h.GetPaymentByID)
+
+	req := httptest.NewRequest(http.MethodGet, "/payments/1", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "db error")
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestCreatePayment_InternalError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := new(MockPaymentService)
+	h := &handler.PaymentHandler{Service: mockSvc}
+
+	mockSvc.
+		On("CreatePayment", mock.Anything, mock.Anything).
+		Return(0, errors.New("insert failed"))
+
+	r := gin.New()
+	r.POST("/payments", h.CreatePayment)
+
+	payload := `{"amount":1000}`
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/payments",
+		strings.NewReader(payload),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "insert failed")
+
+	mockSvc.AssertExpectations(t)
 }
 
 func TestGetPayments(t *testing.T) {
@@ -345,6 +399,69 @@ func TestUpdatePayment_Error(t *testing.T) {
 	mockService.AssertExpectations(t)
 }
 
+func TestPaymentHandler_GetPaymentByID_InvalidID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockService := new(MockPaymentService)
+	h := &handler.PaymentHandler{Service: mockService}
+
+	r := gin.New()
+	r.GET("/payments/:id", h.GetPaymentByID)
+
+	req := httptest.NewRequest(http.MethodGet, "/payments/abc", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid payment id")
+}
+
+func TestPaymentHandler_CreatePayment_InvalidJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockService := new(MockPaymentService)
+	h := &handler.PaymentHandler{Service: mockService}
+
+	r := gin.New()
+	r.POST("/payments", h.CreatePayment)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/payments",
+		strings.NewReader("{invalid json"),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestPaymentHandler_UpdatePayment_InvalidID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockService := new(MockPaymentService)
+	h := &handler.PaymentHandler{Service: mockService}
+
+	r := gin.New()
+	r.PUT("/payments/:id", h.UpdatePayment)
+
+	payload := `{"amount":1000}`
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/payments/xyz",
+		strings.NewReader(payload),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestGetPaymentStats_Error(t *testing.T) {
 	mockService := new(MockPaymentService)
 	h := &handler.PaymentHandler{Service: mockService}
@@ -360,6 +477,28 @@ func TestGetPaymentStats_Error(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	mockService.AssertExpectations(t)
+}
+
+func TestPaymentHandler_UpdatePayment_InvalidJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockService := new(MockPaymentService)
+	h := &handler.PaymentHandler{Service: mockService}
+
+	r := gin.New()
+	r.PUT("/payments/:id", h.UpdatePayment)
+
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/payments/1",
+		strings.NewReader("invalid json"),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestDeletePayment_Error(t *testing.T) {

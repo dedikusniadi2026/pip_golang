@@ -26,7 +26,6 @@ func (r *AssignmentsRepository) Create(a *model.DriverAssignment) error {
 			 VALUES ($1, $2, $3, $4, $5, $6)
 			 RETURNING id
 			`
-
 	err := r.DB.QueryRow(query,
 		a.VehicleID,
 		a.StartDate,

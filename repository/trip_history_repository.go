@@ -30,7 +30,7 @@ func (r *TripHistoryRepository) GetTripHistory() ([]model.TripHistory, error) {
 	}
 	defer rows.Close()
 
-	trips := []model.TripHistory{} // penting: default empty slice
+	trips := []model.TripHistory{}
 
 	for rows.Next() {
 		var b model.TripHistory

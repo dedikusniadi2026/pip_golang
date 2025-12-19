@@ -201,3 +201,32 @@ func TestPopularDestinationRepository_Delete_Error(t *testing.T) {
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
 }
+
+func TestPopularDestinationRepository_GetAll_ScanError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	repo := &repository.PopularDestinationRepository{DB: db}
+
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"destination",
+		"bookings",
+		"created_at",
+	}).AddRow(
+		1,
+		"Bali",
+		"INVALID_BOOKINGS",
+		time.Now(),
+	)
+
+	mock.ExpectQuery(`SELECT id, destination, bookings, created_at FROM popular_destinations`).
+		WillReturnRows(rows)
+
+	result, err := repo.GetAll()
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

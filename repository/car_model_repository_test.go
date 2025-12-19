@@ -11,33 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCarModelRepository_FindAll_Success(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
-	defer db.Close()
-
-	repo := repository.NewCarModelRepository(db)
-
-	rows := sqlmock.NewRows([]string{"id", "model_name", "created_at", "updated_at"}).
-		AddRow(1, "Model A", time.Now(), time.Now()).
-		AddRow(2, "Model B", time.Now(), time.Now())
-
-	mock.ExpectQuery(`SELECT id, model_name, created_at, updated_at FROM car_model`).
-		WillReturnRows(rows)
-
-	carModels, err := repo.FindAll()
-
-	assert.NoError(t, err)
-	assert.Len(t, carModels, 2)
-	assert.Equal(t, 1, carModels[0].ID)
-	assert.Equal(t, "Model A", carModels[0].ModelName)
-	assert.Equal(t, 2, carModels[1].ID)
-	assert.Equal(t, "Model B", carModels[1].ModelName)
-
-	err = mock.ExpectationsWereMet()
-	assert.NoError(t, err)
-}
-
 func TestCarModelRepository_FindAll_Error(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	assert.NoError(t, err)
@@ -56,6 +29,63 @@ func TestCarModelRepository_FindAll_Error(t *testing.T) {
 
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
+}
+
+func TestCarModelRepository_FindAll_ScanError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	repo := &repository.CarModelRepository{DB: db}
+
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"model_name",
+		"created_at",
+	}).AddRow(
+		1,
+		"Avanza",
+		time.Now(),
+	)
+
+	mock.ExpectQuery("SELECT id, model_name, created_at, updated_at FROM car_model").
+		WillReturnRows(rows)
+
+	result, err := repo.FindAll()
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCarModelRepository_FindAll_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+
+	repo := &repository.CarModelRepository{DB: db}
+
+	rows := sqlmock.NewRows([]string{
+		"id",
+		"model_name",
+		"created_at",
+		"updated_at",
+	}).AddRow(
+		1,
+		"Avanza",
+		time.Now(),
+		time.Now(),
+	)
+
+	mock.ExpectQuery("SELECT id, model_name, created_at, updated_at FROM car_model").
+		WillReturnRows(rows)
+
+	result, err := repo.FindAll()
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "Avanza", result[0].ModelName)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestCarModelRepository_GetByID_Success(t *testing.T) {

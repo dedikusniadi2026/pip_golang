@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,9 @@ func (m *MockDriverService) GetAll() ([]model.Driver, error) {
 }
 
 func (m *MockDriverService) Create(driver *model.Driver) error {
+	if m.ReturnError {
+		return errors.New("insert failed")
+	}
 	if driver.Name == "" {
 		return errors.New("name required")
 	}
@@ -100,6 +104,107 @@ func TestGetAllDrivers_Error(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestDriverHandler_Create_InternalError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := &MockDriverService{
+		ReturnError: true,
+	}
+
+	h := &handler.DriverHandler{
+		Service: mockSvc,
+	}
+
+	r := gin.New()
+	r.POST("/drivers", h.Create)
+
+	payload := `{
+        "name":"John",
+        "email":"john@mail.com",
+        "phone":"08123",
+        "address":"Bandung",
+        "driver_license_number":"SIM123",
+        "car_model_id":"1",
+        "car_type_id":"1",
+        "plate_number":"B1234CD",
+        "status":"active"
+    }`
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/drivers",
+		strings.NewReader(payload),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "insert failed")
+}
+
+func TestDriverHandler_Create_Success(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := &MockDriverService{
+		ReturnError: false,
+	}
+
+	h := &handler.DriverHandler{
+		Service: mockSvc,
+	}
+
+	r := gin.New()
+	r.POST("/drivers", h.Create)
+
+	payload := `{
+		"name":"John",
+		"email":"john@mail.com",
+		"phone":"08123",
+		"address":"Bandung",
+		"driver_license_number":"SIM123",
+		"car_model_id":"1",
+		"car_type_id":"1",
+		"plate_number":"B1234CD",
+		"status":"active"
+	}`
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/drivers",
+		strings.NewReader(payload),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+}
+
+func TestDriverHandler_Create_InvalidJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockSvc := &MockDriverService{}
+	h := &handler.DriverHandler{Service: mockSvc}
+
+	r := gin.New()
+	r.POST("/drivers", h.Create)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/drivers",
+		strings.NewReader("invalid json"),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestCreateDriver(t *testing.T) {

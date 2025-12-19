@@ -13,7 +13,6 @@ type CarTypeServiceInterface interface {
 	GetByID(id int) (*model.CarType, error)
 	Create(model.CarType) error
 }
-
 type CarTypeHandler struct {
 	Service CarTypeServiceInterface
 }
@@ -21,7 +20,6 @@ type CarTypeHandler struct {
 func NewCarTypeHandler(s CarTypeServiceInterface) *CarTypeHandler {
 	return &CarTypeHandler{Service: s}
 }
-
 func (h *CarTypeHandler) GetAll(c *gin.Context) {
 	data, err := h.Service.GetAll()
 	if err != nil {

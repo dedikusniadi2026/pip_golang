@@ -4,6 +4,7 @@ import (
 	"auth-service/model"
 	"auth-service/service"
 	"testing"
+	"auth-service/handler" 
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +13,19 @@ import (
 
 type MockCarModelRepository struct {
 	mock.Mock
+}
+
+type MockCarModelService struct{}
+
+func (m *MockCarModelService) GetAll() ([]model.CarModel, error) { return nil, nil }
+func (m *MockCarModelService) GetByID(id int) (*model.CarModel, error) { return nil, nil }
+func (m *MockCarModelService) Create(cm model.CarModel) error { return nil }
+
+func TestNewCarModelRepositoryHandler(t *testing.T) {
+	mockSvc := &MockCarModelService{}
+	h := handler.NewCarModelRepositoryHandler(mockSvc)
+
+	assert.NotNil(t, h)
 }
 
 func (m *MockCarModelRepository) FindAll() ([]model.CarModel, error) {

@@ -80,6 +80,51 @@ func TestCarHandler_GetAll(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestCarHandler_Create_BadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockService := new(MockCarService)
+	h := handler.NewCarHandler(mockService)
+
+	r := gin.New()
+	r.POST("/cars", h.Create)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/cars",
+		strings.NewReader(`{"name":`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCarHandler_Update_BadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockService := new(MockCarService)
+	h := handler.NewCarHandler(mockService)
+
+	router := gin.New()
+	router.PUT("/cars/:id", h.Update)
+
+	reqBody := `{"name":`
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/cars/1",
+		strings.NewReader(reqBody),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 func TestCarHandler_GetByID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mockSvc := &MockCarService{}

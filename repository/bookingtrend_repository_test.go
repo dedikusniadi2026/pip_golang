@@ -3,6 +3,7 @@ package repository_test
 import (
 	"auth-service/repository"
 	"database/sql"
+	"errors"
 	"regexp"
 	"testing"
 
@@ -68,4 +69,62 @@ func TestBookingTrendsRepository_GetTrends_Error(t *testing.T) {
 
 	err = mock.ExpectationsWereMet()
 	assert.NoError(t, err)
+}
+
+func TestGetTrends_QueryError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewBookingTrendsRepository(db)
+
+	mock.ExpectQuery("FROM booking_trends").
+		WithArgs(2024).
+		WillReturnError(errors.New("query error"))
+
+	trends, err := repo.GetTrends(2024)
+
+	assert.Nil(t, trends)
+	assert.Error(t, err)
+}
+
+func TestGetTrends_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewBookingTrendsRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"month", "booking_count",
+	}).AddRow("Jan", 10)
+
+	mock.ExpectQuery("FROM booking_trends").
+		WithArgs(2024).
+		WillReturnRows(rows)
+
+	trends, err := repo.GetTrends(2024)
+
+	assert.Nil(t, trends)
+	assert.Error(t, err)
+}
+
+func TestGetTrends_Success(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.NewBookingTrendsRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"month", "booking_count", "year",
+	}).
+		AddRow("Jan", 10, 2024).
+		AddRow("Feb", 20, 2024)
+
+	mock.ExpectQuery("FROM booking_trends").
+		WithArgs(2024).
+		WillReturnRows(rows)
+
+	trends, err := repo.GetTrends(2024)
+
+	assert.NoError(t, err)
+	assert.Len(t, trends, 2)
 }

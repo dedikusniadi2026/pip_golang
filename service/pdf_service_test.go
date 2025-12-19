@@ -145,6 +145,17 @@ func TestPDFService_GenerateTripReceiptPDF_GeneratePDF_Error(t *testing.T) {
 	mockGen.AssertExpectations(t)
 }
 
+func TestDefaultPDFGenerator_GeneratePDF(t *testing.T) {
+	gen := &service.DefaultPDFGenerator{}
+
+	html := "<html><body>Hello</body></html>"
+
+	pdfBytes, err := gen.GeneratePDF(html)
+	assert.NoError(t, err)
+	assert.NotNil(t, pdfBytes)
+	assert.Greater(t, len(pdfBytes), 0)
+}
+
 func TestPDFService_RepoError(t *testing.T) {
 	mockRepo := new(MockPDFRepository)
 	mockGen := new(MockPDFGenerator)

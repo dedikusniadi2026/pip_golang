@@ -251,3 +251,19 @@ func TestPaymentService_GetAllPayments_Error(t *testing.T) {
 	assert.Empty(t, result)
 	mockRepo.AssertExpectations(t)
 }
+
+func TestPaymentService_GetAll(t *testing.T) {
+	mockRepo := new(MockPaymentRepository)
+	svc := service.NewPaymentService(mockRepo)
+	ctx := context.Background()
+
+	expected := []model.Payment{
+		{PaymentID: 1, BookingID: 1, Customer: "John Doe", Driver: "Jane Doe", Amount: 100.0, Method: "credit", Status: "paid", PaymentDate: "2023-01-01"},
+	}
+	mockRepo.On("GetAll", ctx).Return(expected, nil)
+
+	result, err := svc.GetAll(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, result)
+	mockRepo.AssertExpectations(t)
+}

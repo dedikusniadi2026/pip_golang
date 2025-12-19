@@ -1,15 +1,29 @@
-# TODO: Update Coverage to 100% for auth-service/service
+# TODO
 
-## Tasks
-- [x] Create service/auth_service_test.go with MockUserRepository
-- [x] Add test for Login method - success case
-- [x] Add test for Login method - invalid password
-- [x] Add test for Login method - user not found error
-- [x] Add test for HashPassword function
-- [x] Add test for CheckPasswordHash function - valid
-- [x] Add test for CheckPasswordHash function - invalid
-- [x] Add test for GenerateJWT function
-- [x] Add test for GenerateRefreshToken function
-- [x] Run go test ./service/... to execute tests
-- [x] Run go test -cover ./service/... to check coverage
-- [x] Verify coverage.out shows 100% for auth_service.go
+## Fix Login Error "invalid credentials password"
+
+### Problem
+- Login fails with "invalid credentials password" because passwords in DB are not hashed with bcrypt.
+
+### Solution
+- Added Register endpoint to create users with properly hashed passwords.
+- Fixed AuthService creation to use NewAuthService with tokenRepo.
+
+### Steps Completed
+- [x] Add Save to UserRepository interface
+- [x] Add Register to AuthServiceInterface
+- [x] Add Register method to AuthService
+- [x] Add RegisterRequest to dto.go
+- [x] Add Register to AuthHandler
+- [x] Add /register route in server.go
+- [x] Fix authService creation in server.go
+
+### Next Steps
+- [ ] Register new users using POST /register with username, password, role
+- [ ] For existing users, update passwords in DB to bcrypt hashes or re-register them
+- [ ] Test login with properly hashed passwords
+
+### Testing
+- Run the server: go run main.go
+- Register a user: curl -X POST http://localhost:8080/register -H "Content-Type: application/json" -d '{"username":"admin","password":"password123","role":"ADMIN"}'
+- Login: curl -X POST http://localhost:8080/login -H "Content-Type: application/json" -d '{"username":"admin","password":"password123"}'

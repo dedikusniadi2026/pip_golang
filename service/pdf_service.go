@@ -35,10 +35,6 @@ func (d *DefaultPDFGenerator) GeneratePDF(html string) ([]byte, error) {
 	return pdfBytes, err
 }
 
-type PDFServiceInterface interface {
-	GenerateTripReceiptPDF(tripID string) ([]byte, string, error)
-}
-
 type TemplateRenderer interface {
 	RenderPDFReceipt(data model.PDFTemplateData) (string, error)
 }

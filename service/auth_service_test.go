@@ -1,134 +1,227 @@
-package service_test
+package service
 
 import (
 	"auth-service/model"
-	"auth-service/service"
+	"auth-service/utils"
 	"errors"
 	"testing"
+	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-type MockUserRepository struct {
-	mock.Mock
+type MockUserRepo struct {
+	FindByUsernameFn func(username string) (*model.User, error)
+	SaveFn           func(user *model.User) error
 }
 
-func (m *MockUserRepository) GetUserWithRole(username string) (*model.User, error) {
-	args := m.Called(username)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+func (m *MockUserRepo) FindByUsername(username string) (*model.User, error) {
+	if m.FindByUsernameFn != nil {
+		return m.FindByUsernameFn(username)
 	}
-	return args.Get(0).(*model.User), args.Error(1)
+	return nil, nil
+}
+
+func (m *MockUserRepo) Save(user *model.User) error {
+	if m.SaveFn != nil {
+		return m.SaveFn(user)
+	}
+	return nil
+}
+
+type MockTokenRepo struct {
+	SaveFn func(token *model.RefreshToken) error
+}
+
+func (m *MockTokenRepo) Save(token *model.RefreshToken) error {
+	if m.SaveFn != nil {
+		return m.SaveFn(token)
+	}
+	return nil
+}
+
+type MockTokenRepoError struct{}
+
+func (m *MockTokenRepoError) Save(token *model.RefreshToken) error {
+	return errors.New("db error")
 }
 
 func TestAuthService_Login_Success(t *testing.T) {
-	mockRepo := new(MockUserRepository)
-	svc := &service.AuthService{Repo: mockRepo}
+	hashedPassword, _ := utils.HashPassword("password123")
 
-	hashedPassword, _ := service.HashPassword("password123")
-	user := &model.User{ID: 1, Username: "test@example.com", Password: hashedPassword, Role: "admin"}
-	mockRepo.On("GetUserWithRole", "test@example.com").Return(user, nil)
+	userRepo := &MockUserRepo{
+		FindByUsernameFn: func(username string) (*model.User, error) {
+			return &model.User{
+				ID:       1,
+				Username: "admin",
+				Password: hashedPassword,
+				Role:     "ADMIN",
+			}, nil
+		},
+	}
 
-	token, refreshToken, err := svc.Login("test@example.com", "password123")
+	tokenRepo := &MockTokenRepo{
+		SaveFn: func(token *model.RefreshToken) error {
+			assert.Equal(t, int64(1), token.UserID)
+			assert.NotEmpty(t, token.TokenHash)
+			assert.True(t, token.ExpiresAt.After(time.Now()))
+			return nil
+		},
+	}
+
+	service := NewAuthService(userRepo, tokenRepo)
+
+	accessToken, refreshToken, err := service.Login("admin", "password123")
+
 	assert.NoError(t, err)
-	assert.NotEmpty(t, token)
+	assert.NotEmpty(t, accessToken)
 	assert.NotEmpty(t, refreshToken)
+}
 
-	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-		return []byte("secret_key"), nil
-	})
+func TestAuthService_Register_Success(t *testing.T) {
+	userRepo := &MockUserRepo{
+		SaveFn: func(user *model.User) error {
+			assert.Equal(t, "admin", user.Username)
+			assert.NotEmpty(t, user.Password)
+			assert.Equal(t, "ADMIN", user.Role)
+			return nil
+		},
+	}
+
+	service := &AuthService{
+		UserRepo:       userRepo,
+		HashPasswordFn: utils.HashPassword,
+	}
+
+	err := service.Register("admin", "password123", "ADMIN")
 	assert.NoError(t, err)
-	assert.True(t, parsedToken.Valid)
+}
 
-	mockRepo.AssertExpectations(t)
+func TestAuthService_Register_HashPasswordError(t *testing.T) {
+	userRepo := &MockUserRepo{}
+
+	service := &AuthService{
+		UserRepo: userRepo,
+		HashPasswordFn: func(password string) (string, error) {
+			return "", errors.New("hash error")
+		},
+	}
+
+	err := service.Register("admin", "password123", "ADMIN")
+	assert.EqualError(t, err, "hash error")
+}
+
+func TestAuthService_Register_SaveUserError(t *testing.T) {
+	userRepo := &MockUserRepo{
+		SaveFn: func(user *model.User) error {
+			return errors.New("db error")
+		},
+	}
+
+	service := &AuthService{
+		UserRepo:       userRepo,
+		HashPasswordFn: utils.HashPassword,
+	}
+
+	err := service.Register("admin", "password123", "ADMIN")
+	assert.EqualError(t, err, "db error")
+}
+
+func TestAuthService_Login_InvalidCredentials(t *testing.T) {
+	userRepo := &MockUserRepo{
+		FindByUsernameFn: func(username string) (*model.User, error) {
+			return nil, errors.New("user not found")
+		},
+	}
+	tokenRepo := &MockTokenRepo{}
+
+	service := NewAuthService(userRepo, tokenRepo)
+	access, refresh, err := service.Login("admin", "password123")
+
+	assert.Empty(t, access)
+	assert.Empty(t, refresh)
+	assert.EqualError(t, err, "invalid credentials")
 }
 
 func TestAuthService_Login_InvalidPassword(t *testing.T) {
-	mockRepo := new(MockUserRepository)
-	svc := &service.AuthService{Repo: mockRepo}
+	hashedPassword, _ := utils.HashPassword("correct_password")
 
-	hashedPassword, _ := service.HashPassword("password123")
-	user := &model.User{ID: 1, Username: "test@example.com", Password: hashedPassword, Role: "admin"}
-	mockRepo.On("GetUserWithRole", "test@example.com").Return(user, nil)
+	userRepo := &MockUserRepo{
+		FindByUsernameFn: func(username string) (*model.User, error) {
+			return &model.User{
+				ID:       1,
+				Username: "admin",
+				Password: hashedPassword,
+				Role:     "ADMIN",
+			}, nil
+		},
+	}
+	tokenRepo := &MockTokenRepo{}
 
-	token, refreshToken, err := svc.Login("test@example.com", "wrongpassword")
-	assert.Error(t, err)
-	assert.Equal(t, "invalid credentials", err.Error())
-	assert.Empty(t, token)
-	assert.Empty(t, refreshToken)
+	service := NewAuthService(userRepo, tokenRepo)
+	access, refresh, err := service.Login("admin", "wrong_password")
 
-	mockRepo.AssertExpectations(t)
+	assert.Empty(t, access)
+	assert.Empty(t, refresh)
+	assert.EqualError(t, err, "invalid credentials password")
 }
 
-func TestAuthService_Login_UserNotFound(t *testing.T) {
-	mockRepo := new(MockUserRepository)
-	svc := &service.AuthService{Repo: mockRepo}
+func TestAuthService_Login_GenerateAccessTokenError(t *testing.T) {
+	hashedPassword, _ := utils.HashPassword("password123")
 
-	mockRepo.On("GetUserWithRole", "test@example.com").Return((*model.User)(nil), errors.New("user not found"))
+	userRepo := &MockUserRepo{
+		FindByUsernameFn: func(username string) (*model.User, error) {
+			return &model.User{
+				ID:       1,
+				Username: "admin",
+				Password: hashedPassword,
+				Role:     "ADMIN",
+			}, nil
+		},
+	}
+	tokenRepo := &MockTokenRepo{}
 
-	token, refreshToken, err := svc.Login("test@example.com", "password123")
-	assert.Error(t, err)
-	assert.Equal(t, "user not found", err.Error())
-	assert.Empty(t, token)
-	assert.Empty(t, refreshToken)
+	service := NewAuthService(userRepo, tokenRepo)
+	service.GenerateAccessToken = func(userID int64, role string) (string, error) {
+		return "", errors.New("token generation error")
+	}
 
-	mockRepo.AssertExpectations(t)
+	access, refresh, err := service.Login("admin", "password123")
+
+	assert.Empty(t, access)
+	assert.Empty(t, refresh)
+	assert.EqualError(t, err, "token generation error")
 }
 
-func TestHashPassword(t *testing.T) {
-	password := "password123"
-	hashed, err := service.HashPassword(password)
+func TestAuthService_Login_SaveRefreshTokenError(t *testing.T) {
+	hashedPassword, _ := utils.HashPassword("password123")
+
+	userRepo := &MockUserRepo{
+		FindByUsernameFn: func(username string) (*model.User, error) {
+			return &model.User{
+				ID:       1,
+				Username: "admin",
+				Password: hashedPassword,
+				Role:     "ADMIN",
+			}, nil
+		},
+	}
+	tokenRepo := &MockTokenRepoError{}
+
+	service := NewAuthService(userRepo, tokenRepo)
+
+	access, refresh, err := service.Login("admin", "password123")
+
+	assert.Empty(t, access)
+	assert.Empty(t, refresh)
+	assert.EqualError(t, err, "db error")
+}
+
+func TestAuthService_RefreshToken_Success(t *testing.T) {
+	service := &AuthService{}
+
+	access, err := service.RefreshToken("any_refresh_token")
+
 	assert.NoError(t, err)
-	assert.NotEmpty(t, hashed)
-	assert.NotEqual(t, password, hashed)
-}
-
-func TestCheckPasswordHash_Valid(t *testing.T) {
-	password := "password123"
-	hashed, _ := service.HashPassword(password)
-	valid := service.CheckPasswordHash(password, hashed)
-	assert.True(t, valid)
-}
-
-func TestCheckPasswordHash_Invalid(t *testing.T) {
-	password := "password123"
-	hashed, _ := service.HashPassword(password)
-	valid := service.CheckPasswordHash("wrongpassword", hashed)
-	assert.False(t, valid)
-}
-
-func TestGenerateJWT(t *testing.T) {
-	user := model.User{ID: 1, Username: "test@example.com", Password: "hashed", Role: "admin"}
-	token, err := service.GenerateJWT(user)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, token)
-
-	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-		return []byte("secret_key"), nil
-	})
-	assert.NoError(t, err)
-	assert.True(t, parsedToken.Valid)
-
-	claims, ok := parsedToken.Claims.(jwt.MapClaims)
-	assert.True(t, ok)
-	assert.Equal(t, float64(1), claims["user_id"])
-}
-
-func TestGenerateRefreshToken(t *testing.T) {
-	user := model.User{ID: 1, Username: "test@example.com", Password: "hashed", Role: "admin"}
-	token, err := service.GenerateRefreshToken(user)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, token)
-
-	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-		return []byte("refresh_secret_key"), nil
-	})
-	assert.NoError(t, err)
-	assert.True(t, parsedToken.Valid)
-
-	claims, ok := parsedToken.Claims.(jwt.MapClaims)
-	assert.True(t, ok)
-	assert.Equal(t, float64(1), claims["user_id"])
+	assert.Equal(t, "NEW_ACCESS_TOKEN", access)
 }

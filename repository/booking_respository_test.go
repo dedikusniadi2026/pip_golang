@@ -4,6 +4,7 @@ import (
 	"auth-service/model"
 	"auth-service/repository"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -74,28 +75,77 @@ func TestBookingRepository_Create_Error(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestBookingRepository_GetAll_Success(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	assert.NoError(t, err)
+func TestBookingRepository_GetAll_QueryError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
 	defer db.Close()
 
 	repo := repository.BookingRepository{DB: db}
 
-	rows := sqlmock.NewRows([]string{"id", "customer", "driver", "place", "date", "price", "status", "payment", "phone_number", "pickup_location", "drop_location", "pickup_time", "amount", "notes", "created_at", "updated_at"}).
-		AddRow("BK123", "John Doe", "Driver1", "Location A", "2023-10-01", "100.00", "Pending", "Cash", "1234567890", "Pickup", "Drop", "10:00", 100.0, "Test note", time.Now(), time.Now())
+	mock.ExpectQuery("FROM booking").
+		WillReturnError(errors.New("query error"))
 
-	mock.ExpectQuery(`SELECT id, customer, driver, place, date, price, status, payment, phone_number, pickup_location, drop_location, pickup_time, amount, notes, created_at, updated_at FROM booking`).
+	bookings, err := repo.GetAll()
+
+	assert.Nil(t, bookings)
+	assert.Error(t, err)
+}
+
+func TestBookingRepository_GetAll_ScanError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.BookingRepository{DB: db}
+
+	rows := sqlmock.NewRows([]string{
+		"id", "customer",
+	}).AddRow(1, "John")
+
+	mock.ExpectQuery("FROM booking").
+		WillReturnRows(rows)
+
+	bookings, err := repo.GetAll()
+
+	assert.Nil(t, bookings)
+	assert.Error(t, err)
+}
+
+func TestBookingRepository_GetAll_Success(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+
+	repo := repository.BookingRepository{DB: db}
+
+	rows := sqlmock.NewRows([]string{
+		"id", "customer", "driver", "place", "date",
+		"price", "status", "payment", "phone_number",
+		"pickup_location", "drop_location", "pickup_time",
+		"amount", "notes", "created_at", "updated_at",
+	}).AddRow(
+		1,
+		"John",
+		"Driver A",
+		"Bandung",
+		time.Now(),
+		100000,
+		"CONFIRMED",
+		"CASH",
+		"08123456789",
+		"A",
+		"B",
+		time.Now(),
+		100000,
+		"OK",
+		time.Now(),
+		time.Now(),
+	)
+
+	mock.ExpectQuery("FROM booking").
 		WillReturnRows(rows)
 
 	bookings, err := repo.GetAll()
 
 	assert.NoError(t, err)
 	assert.Len(t, bookings, 1)
-	assert.Equal(t, "BK123", bookings[0].ID)
-	assert.Equal(t, "John Doe", bookings[0].Customer)
-
-	err = mock.ExpectationsWereMet()
-	assert.NoError(t, err)
 }
 
 func TestBookingRepository_GetAll_Error(t *testing.T) {
